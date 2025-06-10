@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ RUN npx drizzle-kit generate --dialect sqlite --schema ./server/db/sqlite/schema
 
 RUN npm run build:sqlite
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 WORKDIR /app
 
