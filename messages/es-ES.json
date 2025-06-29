@@ -1089,6 +1089,7 @@
     "sidebarSettings": "Ajustes",
     "sidebarAllUsers": "Todos los usuarios",
     "sidebarIdentityProviders": "Proveedores de identidad",
+    "sidebarSecurityEvents": "Eventos de seguridad",
     "sidebarLicense": "Licencia",
     "enableDockerSocket": "Habilitar conector Docker",
     "enableDockerSocketDescription": "Habilitar el descubrimiento de Docker Socket para completar la información del contenedor. La ruta del socket debe proporcionarse a Newt.",

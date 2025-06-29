@@ -1089,6 +1089,7 @@
     "sidebarSettings": "Ayarlar",
     "sidebarAllUsers": "Tüm Kullanıcılar",
     "sidebarIdentityProviders": "Kimlik Sağlayıcılar",
+    "sidebarSecurityEvents": "Güvenlik Olayları",
     "sidebarLicense": "Lisans",
     "enableDockerSocket": "Docker Soketi Etkinleştir",
     "enableDockerSocketDescription": "Konteyner bilgilerini doldurmak için Docker Socket keşfini etkinleştirin. Socket yolu Newt'e sağlanmalıdır.",
