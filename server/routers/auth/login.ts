@@ -18,6 +18,14 @@ import logger from "@server/logger";
 import { verifyPassword } from "@server/auth/password";
 import { verifySession } from "@server/auth/sessions/verifySession";
 import { UserType } from "@server/types/UserTypes";
+import { SecurityEvents } from "@server/lib/securityEventLogger";
+import { 
+    checkAccountLockout, 
+    recordFailedAttempt, 
+    clearFailedAttempts,
+    formatLockoutMessage 
+} from "@server/lib/accountLockout";
+import { timingSafeEqual } from "crypto";
 
 export const loginBodySchema = z
     .object({
@@ -39,6 +47,53 @@ export type LoginResponse = {
 
 export const dynamic = "force-dynamic";
 
+// Constant-time user lookup to prevent timing-based user enumeration
+async function constantTimeUserLookup(email: string): Promise<any | null> {
+    const startTime = process.hrtime.bigint();
+    
+    try {
+        const [user] = await db
+            .select()
+            .from(users)
+            .where(and(eq(users.type, UserType.Internal), eq(users.email, email)))
+            .limit(1);
+        
+        // Add artificial delay to make timing more consistent (minimum 5ms)
+        const elapsed = process.hrtime.bigint() - startTime;
+        const minDelay = BigInt(5_000_000); // 5ms in nanoseconds
+        
+        if (elapsed < minDelay) {
+            const remainingDelay = Number(minDelay - elapsed) / 1_000_000; // Convert to milliseconds
+            await new Promise(resolve => setTimeout(resolve, remainingDelay));
+        }
+        
+        return user || null;
+    } catch (error) {
+        // Add delay even on error to maintain consistent timing
+        const elapsed = process.hrtime.bigint() - startTime;
+        const minDelay = BigInt(5_000_000); // 5ms
+        
+        if (elapsed < minDelay) {
+            const remainingDelay = Number(minDelay - elapsed) / 1_000_000;
+            await new Promise(resolve => setTimeout(resolve, remainingDelay));
+        }
+        
+        return null;
+    }
+}
+
+// Constant-time password verification to prevent timing attacks
+async function constantTimePasswordVerification(password: string, storedHash: string | null): Promise<boolean> {
+    // Always perform password verification, even if storedHash is null
+    // Use a dummy hash when storedHash is null to maintain constant timing
+    const hashToVerify = storedHash || "$2b$10$dummy.hash.to.prevent.timing.attacks.fake.hash.here.12345678901234567890";
+    
+    const isValid = await verifyPassword(password, hashToVerify);
+    
+    // Only return true if we have a real hash AND it's valid
+    return storedHash !== null && isValid;
+}
+
 export async function login(
     req: Request,
     res: Response,
@@ -56,6 +111,8 @@ export async function login(
     }
 
     const { email, password, code } = parsedBody.data;
+    const ipAddress = req.ip || "";
+    const userAgent = req.get('User-Agent') || "";
 
     try {
         const { session: existingSession } = await verifySession(req);
@@ -69,38 +126,39 @@ export async function login(
             });
         }
 
-        const existingUserRes = await db
-            .select()
-            .from(users)
-            .where(
-                and(eq(users.type, UserType.Internal), eq(users.email, email))
-            );
-        if (!existingUserRes || !existingUserRes.length) {
-            if (config.getRawConfig().app.log_failed_attempts) {
-                logger.info(
-                    `Username or password incorrect. Email: ${email}. IP: ${req.ip}.`
-                );
-            }
+        // Check if account is locked
+        const lockoutStatus = await checkAccountLockout(email, ipAddress);
+        if (lockoutStatus.isLocked) {
+            // Log the blocked login attempt
+            await SecurityEvents.failedLogin(email, ipAddress, userAgent);
+            
+            const lockoutMessage = formatLockoutMessage(lockoutStatus);
             return next(
                 createHttpError(
-                    HttpCode.UNAUTHORIZED,
-                    "Username or password is incorrect"
+                    HttpCode.TOO_MANY_REQUESTS,
+                    lockoutMessage
                 )
             );
         }
 
-        const existingUser = existingUserRes[0];
-
-        const validPassword = await verifyPassword(
+        // Use constant-time user lookup to prevent timing attacks
+        const existingUser = await constantTimeUserLookup(email);
+        
+        // Always perform password verification to maintain constant timing
+        const validPassword = await constantTimePasswordVerification(
             password,
-            existingUser.passwordHash!
+            existingUser?.passwordHash || null
         );
-        if (!validPassword) {
+        
+        if (!existingUser || !validPassword) {
             if (config.getRawConfig().app.log_failed_attempts) {
                 logger.info(
                     `Username or password incorrect. Email: ${email}. IP: ${req.ip}.`
                 );
             }
+            // Record failed attempt and log security event
+            await recordFailedAttempt(email, ipAddress);
+            SecurityEvents.failedLogin(email, ipAddress, userAgent);
             return next(
                 createHttpError(
                     HttpCode.UNAUTHORIZED,
@@ -132,6 +190,9 @@ export async function login(
                         `Two-factor code incorrect. Email: ${email}. IP: ${req.ip}.`
                     );
                 }
+                // Record failed attempt and log security event
+                await recordFailedAttempt(email, ipAddress);
+                SecurityEvents.failedLogin(email, ipAddress, userAgent);
                 return next(
                     createHttpError(
                         HttpCode.UNAUTHORIZED,
@@ -140,6 +201,9 @@ export async function login(
                 );
             }
         }
+
+        // Clear any existing failed attempts on successful login
+        await clearFailedAttempts(email);
 
         const token = generateSessionToken();
         const sess = await createSession(token, existingUser.userId);
@@ -151,6 +215,14 @@ export async function login(
         );
 
         res.appendHeader("Set-Cookie", cookie);
+
+        // Log successful login
+        SecurityEvents.successfulLogin(
+            existingUser.userId, 
+            existingUser.email || email, 
+            req.ip || "", 
+            req.get('User-Agent')
+        );
 
         if (
             !existingUser.emailVerified &&

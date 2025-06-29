@@ -512,6 +512,40 @@ export const idpOrg = sqliteTable("idpOrg", {
     orgMapping: text("orgMapping")
 });
 
+export const securityEvents = sqliteTable("securityEvents", {
+    eventId: integer("eventId").primaryKey({ autoIncrement: true }),
+    type: text("type").notNull(), // "FAILED_LOGIN", "SUCCESSFUL_LOGIN", "PASSWORD_CHANGE", etc.
+    message: text("message").notNull(),
+    userId: text("userId").references(() => users.userId, {
+        onDelete: "set null"
+    }),
+    email: text("email"),
+    ipAddress: text("ipAddress"),
+    userAgent: text("userAgent"),
+    severity: text("severity").notNull().default("low"), // "low", "medium", "high"
+    metadata: text("metadata"), // JSON string for additional data
+    timestamp: integer("timestamp").notNull()
+});
+
+export const accountLockouts = sqliteTable("accountLockouts", {
+    lockoutId: integer("lockoutId").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    ipAddress: text("ipAddress"),
+    failedAttempts: integer("failedAttempts").notNull().default(0),
+    lockedAt: integer("lockedAt"),
+    lockoutExpiresAt: integer("lockoutExpiresAt"),
+    isLocked: integer("isLocked", { mode: "boolean" }).notNull().default(false)
+});
+
+export const secureConfigs = sqliteTable("secureConfigs", {
+    configId: integer("configId").primaryKey({ autoIncrement: true }),
+    configKey: text("configKey").notNull().unique(),
+    configValue: text("configValue").notNull(), // encrypted JSON
+    configHash: text("configHash").notNull(), // integrity check
+    updatedAt: integer("updatedAt").notNull(),
+    updatedBy: text("updatedBy")
+});
+
 export type Org = InferSelectModel<typeof orgs>;
 export type User = InferSelectModel<typeof users>;
 export type Site = InferSelectModel<typeof sites>;
@@ -551,3 +585,6 @@ export type Idp = InferSelectModel<typeof idp>;
 export type ApiKey = InferSelectModel<typeof apiKeys>;
 export type ApiKeyAction = InferSelectModel<typeof apiKeyActions>;
 export type ApiKeyOrg = InferSelectModel<typeof apiKeyOrg>;
+export type SecurityEvent = InferSelectModel<typeof securityEvents>;
+export type AccountLockout = InferSelectModel<typeof accountLockouts>;
+export type SecureConfig = InferSelectModel<typeof secureConfigs>;

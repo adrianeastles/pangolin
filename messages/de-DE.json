@@ -1132,5 +1132,9 @@
     "initialSetupTitle": "Initial Einrichtung des Servers",
     "initialSetupDescription": "Erstellen Sie das initiale Server-Admin-Konto. Es kann nur einen Server-Admin geben. Sie können diese Anmeldedaten später immer ändern.",
     "createAdminAccount": "Admin-Konto erstellen",
-    "setupErrorCreateAdmin": "Beim Erstellen des Server-Admin-Kontos ist ein Fehler aufgetreten."
+    "setupErrorCreateAdmin": "Beim Erstellen des Server-Admin-Kontos ist ein Fehler aufgetreten.",
+    "sidebarSecurityEvents": "Sicherheitsereignisse",
+    "sidebarAccountLockouts": "Kontosperrungen",
+    "sidebarSecurityConfig": "Sicherheitskonfiguration",
+    "sidebarSecurity": "Sicherheit"
 }

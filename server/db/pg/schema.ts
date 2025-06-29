@@ -5,7 +5,8 @@ import {
     boolean,
     integer,
     bigint,
-    real
+    real,
+    text
 } from "drizzle-orm/pg-core";
 import { InferSelectModel } from "drizzle-orm";
 
@@ -491,6 +492,40 @@ export const idpOrg = pgTable("idpOrg", {
     orgMapping: varchar("orgMapping")
 });
 
+export const securityEvents = pgTable("securityEvents", {
+    eventId: serial("eventId").primaryKey(),
+    type: varchar("type").notNull(), // "FAILED_LOGIN", "SUCCESSFUL_LOGIN", "PASSWORD_CHANGE", etc.
+    message: varchar("message").notNull(),
+    userId: varchar("userId").references(() => users.userId, {
+        onDelete: "set null"
+    }),
+    email: varchar("email"),
+    ipAddress: varchar("ipAddress"),
+    userAgent: varchar("userAgent"),
+    severity: varchar("severity").notNull().default("low"), // "low", "medium", "high"
+    metadata: varchar("metadata"), // JSON string for additional data
+    timestamp: bigint("timestamp", { mode: "number" }).notNull()
+});
+
+export const accountLockouts = pgTable("accountLockouts", {
+    lockoutId: serial("lockoutId").primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    failedAttempts: integer("failedAttempts").notNull().default(0),
+    lockedAt: bigint("lockedAt", { mode: "bigint" }),
+    lockoutExpiresAt: bigint("lockoutExpiresAt", { mode: "bigint" }),
+    isLocked: boolean("isLocked").notNull().default(false)
+});
+
+export const secureConfigs = pgTable("secureConfigs", {
+    configId: serial("configId").primaryKey(),
+    configKey: varchar("configKey", { length: 100 }).notNull().unique(),
+    configValue: text("configValue").notNull(), // encrypted JSON
+    configHash: varchar("configHash", { length: 64 }).notNull(), // integrity check
+    updatedAt: bigint("updatedAt", { mode: "bigint" }).notNull(),
+    updatedBy: varchar("updatedBy", { length: 36 })
+});
+
 export type Org = InferSelectModel<typeof orgs>;
 export type User = InferSelectModel<typeof users>;
 export type Site = InferSelectModel<typeof sites>;
@@ -530,3 +565,6 @@ export type Idp = InferSelectModel<typeof idp>;
 export type ApiKey = InferSelectModel<typeof apiKeys>;
 export type ApiKeyAction = InferSelectModel<typeof apiKeyActions>;
 export type ApiKeyOrg = InferSelectModel<typeof apiKeyOrg>;
+export type SecurityEvent = InferSelectModel<typeof securityEvents>;
+export type AccountLockout = InferSelectModel<typeof accountLockouts>;
+export type SecureConfig = InferSelectModel<typeof secureConfigs>;

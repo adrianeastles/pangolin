@@ -13,6 +13,8 @@ import * as accessToken from "./accessToken";
 import * as idp from "./idp";
 import * as license from "./license";
 import * as apiKeys from "./apiKeys";
+import { listSecurityEvents } from "./admin/listSecurityEvents";
+import { listAccountLockouts, adminUnlockAccount, getAdminSecurityConfig, updateAdminSecurityConfig, resetSecurityConfigToDefaults, clearSecurityEvents } from "./admin";
 import HttpCode from "@server/types/HttpCode";
 import {
     verifyAccessTokenAccess,
@@ -37,6 +39,12 @@ import { verifyUserIsOrgOwner } from "../middlewares/verifyUserIsOrgOwner";
 import { createNewt, getToken } from "./newt";
 import rateLimit from "express-rate-limit";
 import createHttpError from "http-errors";
+import {
+    adminRateLimit,
+    securityConfigRateLimit,
+    securityEventsClearRateLimit,
+    accountUnlockRateLimit
+} from "@server/middlewares/rateLimiting";
 
 // Root routes
 export const unauthenticated = Router();
@@ -476,11 +484,7 @@ unauthenticated.get("/resource/:resourceId/auth", resource.getResourceAuthInfo);
 unauthenticated.get("/user", verifySessionMiddleware, user.getUser);
 
 authenticated.get("/users", verifyUserIsServerAdmin, user.adminListUsers);
-authenticated.delete(
-    "/user/:userId",
-    verifyUserIsServerAdmin,
-    user.adminRemoveUser
-);
+authenticated.delete("/user/:userId", verifyUserIsServerAdmin, user.adminRemoveUser);
 
 authenticated.put(
     "/org/:orgId/user",
@@ -788,3 +792,16 @@ authRouter.post("/idp/:idpId/oidc/validate-callback", idp.validateOidcCallback);
 
 authRouter.put("/set-server-admin", auth.setServerAdmin);
 authRouter.get("/initial-setup-complete", auth.initialSetupComplete);
+
+// Security Events
+authenticated.get("/admin/security/events", adminRateLimit, verifyUserIsServerAdmin, listSecurityEvents);
+authenticated.delete("/admin/security/events", securityEventsClearRateLimit, verifyUserIsServerAdmin, clearSecurityEvents);
+
+// Account Lockouts
+authenticated.get("/admin/security/lockouts", adminRateLimit, verifyUserIsServerAdmin, listAccountLockouts);
+authenticated.post("/admin/security/unlock-account", accountUnlockRateLimit, verifyUserIsServerAdmin, adminUnlockAccount);
+
+// Security Configuration
+authenticated.get("/admin/security/config", adminRateLimit, verifyUserIsServerAdmin, getAdminSecurityConfig);
+authenticated.post("/admin/security/config", securityConfigRateLimit, verifyUserIsServerAdmin, updateAdminSecurityConfig);
+authenticated.post("/admin/security/config/reset", securityConfigRateLimit, verifyUserIsServerAdmin, resetSecurityConfigToDefaults);

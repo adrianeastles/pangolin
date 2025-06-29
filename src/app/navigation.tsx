@@ -95,9 +95,24 @@ export const adminNavItems: SidebarNavItem[] = [
         icon: <Fingerprint className="h-4 w-4" />
     },
     {
-        title: "sidebarSecurityEvents",
+        title: "sidebarSecurity",
         href: "/admin/security/events",
-        icon: <Shield className="h-4 w-4" />
+        icon: <Shield className="h-4 w-4" />,
+        autoExpand: true,
+        children: [
+            {
+                title: "sidebarSecurityEvents",
+                href: "/admin/security/events"
+            },
+            {
+                title: "sidebarAccountLockouts",
+                href: "/admin/security/lockouts"
+            },
+            {
+                title: "sidebarSecurityConfig",
+                href: "/admin/security/config"
+            }
+        ]
     },
     {
         title: "sidebarLicense",
