@@ -407,6 +407,40 @@ export const resourceRules = pgTable("resourceRules", {
     value: varchar("value").notNull()
 });
 
+// Rule templates (reusable rule sets)
+export const ruleTemplates = pgTable("ruleTemplates", {
+    templateId: varchar("templateId").primaryKey(),
+    orgId: varchar("orgId")
+        .notNull()
+        .references(() => orgs.orgId, { onDelete: "cascade" }),
+    name: varchar("name").notNull(),
+    description: varchar("description"),
+    createdAt: bigint("createdAt", { mode: "number" }).notNull()
+});
+
+// Rules within templates
+export const templateRules = pgTable("templateRules", {
+    ruleId: serial("ruleId").primaryKey(),
+    templateId: varchar("templateId")
+        .notNull()
+        .references(() => ruleTemplates.templateId, { onDelete: "cascade" }),
+    enabled: boolean("enabled").notNull().default(true),
+    priority: integer("priority").notNull(),
+    action: varchar("action").notNull(), // ACCEPT, DROP
+    match: varchar("match").notNull(), // CIDR, IP, PATH
+    value: varchar("value").notNull()
+});
+
+// Template assignments to resources
+export const resourceTemplates = pgTable("resourceTemplates", {
+    resourceId: integer("resourceId")
+        .notNull()
+        .references(() => resources.resourceId, { onDelete: "cascade" }),
+    templateId: varchar("templateId")
+        .notNull()
+        .references(() => ruleTemplates.templateId, { onDelete: "cascade" })
+});
+
 export const supporterKey = pgTable("supporterKey", {
     keyId: serial("keyId").primaryKey(),
     key: varchar("key").notNull(),
@@ -629,3 +663,6 @@ export type OlmSession = InferSelectModel<typeof olmSessions>;
 export type UserClient = InferSelectModel<typeof userClients>;
 export type RoleClient = InferSelectModel<typeof roleClients>;
 export type OrgDomains = InferSelectModel<typeof orgDomains>;
+export type RuleTemplate = InferSelectModel<typeof ruleTemplates>;
+export type TemplateRule = InferSelectModel<typeof templateRules>;
+export type ResourceTemplate = InferSelectModel<typeof resourceTemplates>;

@@ -95,7 +95,19 @@ export enum ActionsEnum {
     getApiKey = "getApiKey",
     createOrgDomain = "createOrgDomain",
     deleteOrgDomain = "deleteOrgDomain",
-    restartOrgDomain = "restartOrgDomain"
+    restartOrgDomain = "restartOrgDomain",
+    createRuleTemplate = "createRuleTemplate",
+    deleteRuleTemplate = "deleteRuleTemplate",
+    getRuleTemplate = "getRuleTemplate",
+    listRuleTemplates = "listRuleTemplates",
+    updateRuleTemplate = "updateRuleTemplate",
+    createTemplateRule = "createTemplateRule",
+    deleteTemplateRule = "deleteTemplateRule",
+    updateTemplateRule = "updateTemplateRule",
+    listTemplateRules = "listTemplateRules",
+    assignTemplateToResource = "assignTemplateToResource",
+    unassignTemplateFromResource = "unassignTemplateFromResource",
+    listResourceTemplates = "listResourceTemplates"
 }
 
 export async function checkUserActionPermission(
