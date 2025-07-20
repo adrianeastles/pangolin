@@ -107,7 +107,8 @@ export enum ActionsEnum {
     listTemplateRules = "listTemplateRules",
     assignTemplateToResource = "assignTemplateToResource",
     unassignTemplateFromResource = "unassignTemplateFromResource",
-    listResourceTemplates = "listResourceTemplates"
+    listResourceTemplates = "listResourceTemplates",
+    syncTemplateToResource = "syncTemplateToResource"
 }
 
 export async function checkUserActionPermission(

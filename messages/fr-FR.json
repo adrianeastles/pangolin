@@ -1014,9 +1014,9 @@
     "actionDeleteTemplateRule": "Supprimer une règle de modèle",
     "actionUpdateTemplateRule": "Mettre à jour une règle de modèle",
     "actionListTemplateRules": "Lister les règles de modèle",
-    "actionAssignTemplateToResource": "Assigner un modèle à une ressource",
-    "actionUnassignTemplateFromResource": "Désassigner un modèle d'une ressource",
-    "actionListResourceTemplates": "Lister les modèles de ressources",
+    "actionAssignTemplateToResource": "Assigner le modèle à la ressource",
+    "actionUnassignTemplateFromResource": "Désassigner le modèle de la ressource",
+    "actionListResourceTemplates": "Lister les modèles de ressource",
     "actionListOrgs": "Lister les organisations",
     "actionCheckOrgId": "Vérifier l'ID",
     "actionCreateOrg": "Créer une organisation",
@@ -1285,5 +1285,6 @@
     "createDomainDnsPropagation": "Propagation DNS",
     "createDomainDnsPropagationDescription": "Les modifications DNS peuvent mettre du temps à se propager sur internet. Cela peut prendre de quelques minutes à 48 heures selon votre fournisseur DNS et les réglages TTL.",
     "resourcePortRequired": "Le numéro de port est requis pour les ressources non-HTTP",
-    "resourcePortNotAllowed": "Le numéro de port ne doit pas être défini pour les ressources HTTP"
+    "resourcePortNotAllowed": "Le numéro de port ne doit pas être défini pour les ressources HTTP",
+    "actionSyncTemplateToResource": "Synchroniser le modèle vers la ressource"
 }
