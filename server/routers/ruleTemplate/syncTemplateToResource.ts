@@ -9,6 +9,7 @@ import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { OpenAPITags, registry } from "@server/openApi";
+import { propagateTemplateToResources } from "@server/lib/ruleTemplateLogic";
 
 const syncTemplateToResourceParamsSchema = z
     .object({
@@ -109,52 +110,67 @@ export async function syncTemplateToResource(
             );
         }
 
-        // Get all template rules
-        const templateRulesList = await db
-            .select()
-            .from(templateRules)
-            .where(eq(templateRules.templateId, templateId))
-            .orderBy(templateRules.priority);
+        // Use the propagation logic to sync the template to this specific resource
+        try {
+            // Get all rules from the template
+            const templateRulesList = await db
+                .select()
+                .from(templateRules)
+                .where(eq(templateRules.templateId, templateId))
+                .orderBy(templateRules.priority);
 
-        if (templateRulesList.length === 0) {
+            if (templateRulesList.length === 0) {
+                return response(res, {
+                    data: { syncedRules: 0 },
+                    success: true,
+                    error: false,
+                    message: "No rules to sync from template",
+                    status: HttpCode.OK
+                });
+            }
+
+            // Get existing resource rules to calculate the next priority
+            const existingRules = await db
+                .select()
+                .from(resourceRules)
+                .where(eq(resourceRules.resourceId, resourceId))
+                .orderBy(resourceRules.priority);
+
+            // Calculate the starting priority for new template rules
+            // They should come after the highest existing priority
+            const maxExistingPriority = existingRules.length > 0 
+                ? Math.max(...existingRules.map(r => r.priority))
+                : 0;
+
+            // Create new resource rules from template rules with adjusted priorities
+            const newRules = templateRulesList.map((templateRule, index) => ({
+                resourceId,
+                action: templateRule.action,
+                match: templateRule.match,
+                value: templateRule.value,
+                priority: maxExistingPriority + templateRule.priority + index + 1, // Ensure they come after existing rules
+                enabled: templateRule.enabled
+            }));
+
+            if (newRules.length > 0) {
+                await db
+                    .insert(resourceRules)
+                    .values(newRules);
+            }
+
             return response(res, {
-                data: { syncedRules: 0 },
+                data: { syncedRules: newRules.length },
                 success: true,
                 error: false,
-                message: "No rules to sync from template",
+                message: `Successfully synced ${newRules.length} rules from template to resource`,
                 status: HttpCode.OK
             });
+        } catch (error) {
+            logger.error("Error syncing template to resource:", error);
+            return next(
+                createHttpError(HttpCode.INTERNAL_SERVER_ERROR, "An error occurred while syncing template")
+            );
         }
-
-        // Delete existing resource rules that were created from this template
-        // (This is a simple approach - in a more sophisticated system, you might want to track which rules came from which template)
-        await db
-            .delete(resourceRules)
-            .where(eq(resourceRules.resourceId, resourceId));
-
-        // Create new resource rules from template rules
-        const newRules = templateRulesList.map(templateRule => ({
-            resourceId,
-            action: templateRule.action,
-            match: templateRule.match,
-            value: templateRule.value,
-            priority: templateRule.priority,
-            enabled: templateRule.enabled
-        }));
-
-        if (newRules.length > 0) {
-            await db
-                .insert(resourceRules)
-                .values(newRules);
-        }
-
-        return response(res, {
-            data: { syncedRules: newRules.length },
-            success: true,
-            error: false,
-            message: `Successfully synced ${newRules.length} rules from template to resource`,
-            status: HttpCode.OK
-        });
     } catch (error) {
         logger.error(error);
         return next(

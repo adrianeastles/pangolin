@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "@server/db";
-import { resourceTemplates, ruleTemplates, resources, orgs } from "@server/db";
+import { resourceTemplates, ruleTemplates, resources, orgs, templateRules, resourceRules } from "@server/db";
 import { eq, and } from "drizzle-orm";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
@@ -116,6 +116,48 @@ export async function assignTemplateToResource(
                 resourceId,
                 templateId
             });
+
+        // Automatically sync the template rules to the resource
+        try {
+            // Get all rules from the template
+            const templateRulesList = await db
+                .select()
+                .from(templateRules)
+                .where(eq(templateRules.templateId, templateId))
+                .orderBy(templateRules.priority);
+
+            if (templateRulesList.length > 0) {
+                // Get existing resource rules to calculate the next priority
+                const existingRules = await db
+                    .select()
+                    .from(resourceRules)
+                    .where(eq(resourceRules.resourceId, resourceId))
+                    .orderBy(resourceRules.priority);
+
+                // Calculate the starting priority for new template rules
+                // They should come after the highest existing priority
+                const maxExistingPriority = existingRules.length > 0 
+                    ? Math.max(...existingRules.map(r => r.priority))
+                    : 0;
+
+                // Create new resource rules from template rules with adjusted priorities
+                const newRules = templateRulesList.map((templateRule, index) => ({
+                    resourceId,
+                    action: templateRule.action,
+                    match: templateRule.match,
+                    value: templateRule.value,
+                    priority: maxExistingPriority + index + 1, // Simple sequential ordering
+                    enabled: templateRule.enabled
+                }));
+
+                await db
+                    .insert(resourceRules)
+                    .values(newRules);
+            }
+        } catch (error) {
+            logger.error("Error auto-syncing template rules during assignment:", error);
+            // Don't fail the assignment if sync fails, just log it
+        }
 
         return response(res, {
             data: { resourceId, templateId },

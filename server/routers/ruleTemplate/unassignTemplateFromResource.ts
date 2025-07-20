@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "@server/db";
-import { resourceTemplates, ruleTemplates, resources } from "@server/db";
+import { resourceTemplates, ruleTemplates, resources, resourceRules, templateRules } from "@server/db";
 import { eq, and } from "drizzle-orm";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
@@ -99,16 +99,52 @@ export async function unassignTemplateFromResource(
             );
         }
 
+        // Get the template rules to identify which resource rules to remove
+        const templateRulesList = await db
+            .select()
+            .from(templateRules)
+            .where(eq(templateRules.templateId, templateId));
+
+        // Get all resource rules
+        const resourceRulesList = await db
+            .select()
+            .from(resourceRules)
+            .where(eq(resourceRules.resourceId, resourceId));
+
+        // Create a map of template rules for faster lookup
+        const templateRuleMap = new Map(
+            templateRulesList.map(rule => [
+                `${rule.action}:${rule.match}:${rule.value}`,
+                rule
+            ])
+        );
+
+        // Find rules that exactly match template rules
+        const rulesToRemove = resourceRulesList.filter(resourceRule => {
+            const key = `${resourceRule.action}:${resourceRule.match}:${resourceRule.value}`;
+            return templateRuleMap.has(key);
+        });
+
         // Unassign the template from the resource
         await db
             .delete(resourceTemplates)
             .where(and(eq(resourceTemplates.resourceId, resourceId), eq(resourceTemplates.templateId, templateId)));
 
+        // Remove only the rules that exactly match template rules
+        for (const rule of rulesToRemove) {
+            await db
+                .delete(resourceRules)
+                .where(eq(resourceRules.ruleId, rule.ruleId));
+        }
+
         return response(res, {
-            data: null,
+            data: {
+                removedRules: rulesToRemove.length,
+                totalRules: resourceRulesList.length
+            },
             success: true,
             error: false,
-            message: "Template unassigned from resource successfully",
+            message: `Template unassigned successfully. Removed ${rulesToRemove.length} template rules, kept ${resourceRulesList.length - rulesToRemove.length} manual rules.`,
             status: HttpCode.OK
         });
     } catch (error) {

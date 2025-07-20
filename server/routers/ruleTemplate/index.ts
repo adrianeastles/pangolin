@@ -10,4 +10,6 @@ export * from "./listTemplateRules";
 export * from "./assignTemplateToResource";
 export * from "./unassignTemplateFromResource";
 export * from "./listResourceTemplates";
-export * from "./syncTemplateToResource"; 
+export * from "./syncTemplateToResource";
+export * from "./evaluateRules";
+export * from "./evaluateTemplateRules"; 

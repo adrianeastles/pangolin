@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { db } from "@server/db";
-import { ruleTemplates, orgs } from "@server/db";
-import { eq, count } from "drizzle-orm";
+import { ruleTemplates, orgs, templateRules } from "@server/db";
+import { eq, count, sql } from "drizzle-orm";
 import response from "@server/lib/response";
 import HttpCode from "@server/types/HttpCode";
 import createHttpError from "http-errors";
@@ -55,7 +55,13 @@ function queryRuleTemplates(orgId: string) {
             orgId: ruleTemplates.orgId,
             name: ruleTemplates.name,
             description: ruleTemplates.description,
-            createdAt: ruleTemplates.createdAt
+            createdAt: ruleTemplates.createdAt,
+            ruleCount: sql<number>`CAST((
+                SELECT COUNT(*) 
+                FROM ${templateRules} tr
+                WHERE tr.templateId = ${ruleTemplates.templateId}
+                AND tr.enabled = true
+            ) AS INTEGER)`
         })
         .from(ruleTemplates)
         .where(eq(ruleTemplates.orgId, orgId))

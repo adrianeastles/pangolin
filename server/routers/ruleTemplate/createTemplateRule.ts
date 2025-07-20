@@ -14,13 +14,20 @@ import {
     isValidIP,
     isValidUrlGlobPattern
 } from "@server/lib/validators";
+import { 
+    resolvePriorityConflicts, 
+    getNextPriority, 
+    validateRuleConsistency,
+    type Rule 
+} from "@server/lib/ruleTemplateLogic";
+import { propagateTemplateToResources } from "@server/lib/ruleTemplateLogic";
 
 const createTemplateRuleSchema = z
     .object({
         action: z.enum(["ACCEPT", "DROP"]),
         match: z.enum(["CIDR", "IP", "PATH"]),
         value: z.string().min(1),
-        priority: z.number().int(),
+        priority: z.number().int().optional(),
         enabled: z.boolean().optional()
     })
     .strict();
@@ -141,24 +148,82 @@ export async function createTemplateRule(
             }
         }
 
+        // Get existing rules for priority management
+        const existingRulesData = await db
+            .select()
+            .from(templateRules)
+            .where(eq(templateRules.templateId, templateId))
+            .orderBy(templateRules.priority);
+
+        // Convert to Rule interface with proper types
+        const existingRules: Rule[] = existingRulesData.map(rule => ({
+            ruleId: rule.ruleId,
+            templateId: rule.templateId,
+            action: rule.action as "ACCEPT" | "DROP",
+            match: rule.match as "CIDR" | "IP" | "PATH",
+            value: rule.value,
+            priority: rule.priority,
+            enabled: rule.enabled
+        }));
+
+        // Determine priority
+        let finalPriority = priority;
+        if (finalPriority === undefined) {
+            finalPriority = await getNextPriority(undefined, templateId);
+        }
+
+        // Resolve priority conflicts if needed
+        let updatedRules = existingRules;
+        if (finalPriority !== undefined) {
+            updatedRules = await resolvePriorityConflicts(existingRules, finalPriority, undefined, templateId);
+        }
+
+        // Validate rule consistency with updated rules
+        const newRule: Rule = {
+            action,
+            match,
+            value,
+            priority: finalPriority,
+            enabled: enabled ?? true
+        };
+
+        const consistencyCheck = validateRuleConsistency([...updatedRules, newRule]);
+        if (!consistencyCheck.isValid) {
+            return next(
+                createHttpError(
+                    HttpCode.BAD_REQUEST,
+                    `Rule consistency issues: ${consistencyCheck.conflicts.join(", ")}`
+                )
+            );
+        }
+
         // Create the new template rule
-        const [newRule] = await db
+        const [newTemplateRule] = await db
             .insert(templateRules)
             .values({
                 templateId,
                 action,
                 match,
                 value,
-                priority,
+                priority: finalPriority,
                 enabled: enabled ?? true
             })
             .returning();
 
+        // Propagate the template changes to all assigned resources
+        try {
+            await propagateTemplateToResources(templateId);
+            logger.info(`Propagated template ${templateId} changes to all assigned resources after rule creation`);
+        } catch (propagationError) {
+            logger.error("Error propagating template changes after rule creation:", propagationError);
+            // Don't fail the creation if propagation fails, just log it
+        }
+
         return response(res, {
-            data: newRule,
+            data: newTemplateRule,
             success: true,
             error: false,
-            message: "Template rule created successfully",
+            message: "Template rule created successfully and propagated to all assigned resources",
             status: HttpCode.CREATED
         });
     } catch (error) {

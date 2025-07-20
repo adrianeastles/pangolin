@@ -9,6 +9,8 @@ import createHttpError from "http-errors";
 import logger from "@server/logger";
 import { fromError } from "zod-validation-error";
 import { OpenAPITags, registry } from "@server/openApi";
+import { reorderPriorities, type Rule } from "@server/lib/ruleTemplateLogic";
+import { propagateTemplateToResources } from "@server/lib/ruleTemplateLogic";
 
 const deleteTemplateRuleParamsSchema = z
     .object({
@@ -100,16 +102,46 @@ export async function deleteTemplateRule(
             );
         }
 
+        // Get all rules for priority reordering
+        const allRulesData = await db
+            .select()
+            .from(templateRules)
+            .where(eq(templateRules.templateId, templateId))
+            .orderBy(templateRules.priority);
+
+        // Convert to Rule interface with proper types
+        const allRules: Rule[] = allRulesData.map(rule => ({
+            ruleId: rule.ruleId,
+            templateId: rule.templateId,
+            action: rule.action as "ACCEPT" | "DROP",
+            match: rule.match as "CIDR" | "IP" | "PATH",
+            value: rule.value,
+            priority: rule.priority,
+            enabled: rule.enabled
+        }));
+
         // Delete the template rule
         await db
             .delete(templateRules)
             .where(eq(templateRules.ruleId, ruleId));
 
+        // Reorder priorities for remaining rules
+        await reorderPriorities(allRules, existingRule.priority, undefined, templateId);
+
+        // Propagate the template changes to all assigned resources
+        try {
+            await propagateTemplateToResources(templateId);
+            logger.info(`Propagated template ${templateId} changes to all assigned resources after rule deletion`);
+        } catch (propagationError) {
+            logger.error("Error propagating template changes after rule deletion:", propagationError);
+            // Don't fail the deletion if propagation fails, just log it
+        }
+
         return response(res, {
             data: null,
             success: true,
             error: false,
-            message: "Template rule deleted successfully",
+            message: "Template rule deleted successfully and propagated to all assigned resources",
             status: HttpCode.OK
         });
     } catch (error) {

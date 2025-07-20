@@ -25,8 +25,8 @@ const createRuleTemplateParamsSchema = z
     .strict();
 
 registry.registerPath({
-    method: "put",
-    path: "/org/{orgId}/rule-template",
+    method: "post",
+    path: "/org/{orgId}/rule-templates",
     description: "Create a rule template.",
     tags: [OpenAPITags.Org, OpenAPITags.RuleTemplate],
     request: {

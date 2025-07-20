@@ -13,7 +13,8 @@ import {
     TicketCheck,
     User,
     Globe,
-    MonitorUp
+    MonitorUp,
+    Shield
 } from "lucide-react";
 
 export type SidebarNavSection = {
@@ -65,6 +66,11 @@ export const orgNavSections = (
                 title: "sidebarRoles",
                 href: "/{orgId}/settings/access/roles",
                 icon: <Users className="h-4 w-4" />
+            },
+            {
+                title: "sidebarRuleTemplates",
+                href: "/{orgId}/settings/rule-templates",
+                icon: <Shield className="h-4 w-4" />
             },
             {
                 title: "sidebarInvitations",

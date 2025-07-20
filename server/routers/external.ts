@@ -335,8 +335,8 @@ authenticated.delete(
 );
 
 // Rule Template Management
-authenticated.put(
-    "/org/:orgId/rule-template",
+authenticated.post(
+    "/org/:orgId/rule-templates",
     verifyOrgAccess,
     verifyUserHasAction(ActionsEnum.createRuleTemplate),
     ruleTemplate.createRuleTemplate
@@ -416,6 +416,22 @@ authenticated.get(
     verifyResourceAccess,
     verifyUserHasAction(ActionsEnum.listResourceTemplates),
     ruleTemplate.listResourceTemplates
+);
+
+// Rule Evaluation
+authenticated.post(
+    "/resource/:resourceId/evaluate-rules",
+    verifyResourceAccess,
+    verifyUserHasAction(ActionsEnum.listResourceRules),
+    ruleTemplate.evaluateRulesForResource
+);
+
+// Template Rule Evaluation
+authenticated.post(
+    "/org/:orgId/rule-templates/:templateId/evaluate",
+    verifyOrgAccess,
+    verifyUserHasAction(ActionsEnum.getRuleTemplate),
+    ruleTemplate.evaluateTemplateRules
 );
 
 authenticated.get(

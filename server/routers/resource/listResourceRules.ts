@@ -1,8 +1,8 @@
 import { db } from "@server/db";
-import { resourceRules, resources } from "@server/db";
+import { resourceRules, resources, resourceTemplates, templateRules, ruleTemplates } from "@server/db";
 import HttpCode from "@server/types/HttpCode";
 import response from "@server/lib/response";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { NextFunction, Request, Response } from "express";
 import createHttpError from "http-errors";
 import { z } from "zod";
@@ -50,6 +50,90 @@ function queryResourceRules(resourceId: number) {
         .where(eq(resourceRules.resourceId, resourceId));
 
     return baseQuery;
+}
+
+/**
+ * Determine the source of each rule (manual vs template)
+ * This uses heuristics since we don't have templateId in the resourceRules table
+ */
+async function determineRuleSources(resourceId: number, rules: any[]) {
+    try {
+        // Get all templates assigned to this resource
+        const assignedTemplates = await db
+            .select({
+                templateId: resourceTemplates.templateId,
+                name: ruleTemplates.name
+            })
+            .from(resourceTemplates)
+            .leftJoin(ruleTemplates, eq(resourceTemplates.templateId, ruleTemplates.templateId))
+            .where(eq(resourceTemplates.resourceId, resourceId));
+
+        // Get all template rules for assigned templates
+        const templateRulesList = await db
+            .select({
+                templateId: templateRules.templateId,
+                action: templateRules.action,
+                match: templateRules.match,
+                value: templateRules.value,
+                priority: templateRules.priority,
+                enabled: templateRules.enabled
+            })
+            .from(templateRules)
+            .where(
+                sql`${templateRules.templateId} IN (${assignedTemplates.map(t => t.templateId).join(',')})`
+            );
+
+        // Group template rules by template
+        const templateRulesByTemplate = new Map();
+        for (const templateRule of templateRulesList) {
+            if (!templateRulesByTemplate.has(templateRule.templateId)) {
+                templateRulesByTemplate.set(templateRule.templateId, []);
+            }
+            templateRulesByTemplate.get(templateRule.templateId).push(templateRule);
+        }
+
+        // For each resource rule, try to find a matching template rule
+        const rulesWithSource = rules.map(rule => {
+            let source: { type: 'manual' | 'template'; templateId: string | null; templateName: string | null } = { 
+                type: 'manual', 
+                templateId: null, 
+                templateName: null 
+            };
+            
+            // Check each template for matches
+            for (const [templateId, templateRules] of templateRulesByTemplate) {
+                const matchingTemplateRule = templateRules.find((templateRule: any) => 
+                    templateRule.action === rule.action &&
+                    templateRule.match === rule.match &&
+                    templateRule.value === rule.value
+                );
+                
+                if (matchingTemplateRule) {
+                    const templateInfo = assignedTemplates.find(t => t.templateId === templateId);
+                    source = {
+                        type: 'template',
+                        templateId: templateId,
+                        templateName: templateInfo?.name || 'Unknown Template'
+                    };
+                    break;
+                }
+            }
+            
+            return {
+                ...rule,
+                source
+            };
+        });
+
+        return rulesWithSource;
+    } catch (error) {
+        logger.error(`Error determining rule sources for resource ${resourceId}:`, error);
+        // Fallback: mark all rules as manual
+        return rules.map(rule => ({
+            ...rule,
+            source: { type: 'manual' as const, templateId: null, templateName: null }
+        }));
+    }
 }
 
 export type ListResourceRulesResponse = {
@@ -129,9 +213,12 @@ export async function listResourceRules(
         // sort rules list by the priority in ascending order
         rulesList = rulesList.sort((a, b) => a.priority - b.priority);
 
+        // Determine the source of each rule (manual vs template)
+        const rulesWithSource = await determineRuleSources(resourceId, rulesList);
+
         return response<ListResourceRulesResponse>(res, {
             data: {
-                rules: rulesList,
+                rules: rulesWithSource,
                 pagination: {
                     total: totalCount,
                     limit,

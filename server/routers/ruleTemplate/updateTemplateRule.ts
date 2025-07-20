@@ -14,6 +14,7 @@ import {
     isValidIP,
     isValidUrlGlobPattern
 } from "@server/lib/validators";
+import { propagateTemplateToResources } from "@server/lib/ruleTemplateLogic";
 
 const updateTemplateRuleSchema = z
     .object({
@@ -179,11 +180,20 @@ export async function updateTemplateRule(
             .where(eq(templateRules.ruleId, ruleId))
             .returning();
 
+        // Propagate the template changes to all assigned resources
+        try {
+            await propagateTemplateToResources(templateId);
+            logger.info(`Propagated template ${templateId} changes to all assigned resources after rule update`);
+        } catch (propagationError) {
+            logger.error("Error propagating template changes after rule update:", propagationError);
+            // Don't fail the update if propagation fails, just log it
+        }
+
         return response(res, {
             data: updatedRule,
             success: true,
             error: false,
-            message: "Template rule updated successfully",
+            message: "Template rule updated successfully and propagated to all assigned resources",
             status: HttpCode.OK
         });
     } catch (error) {
